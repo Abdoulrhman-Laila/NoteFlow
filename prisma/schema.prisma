@@ -1,0 +1,89 @@
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TeamRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model User {
+  id           Int          @id @default(autoincrement())
+  name         String       @db.VarChar(100)
+  email        String       @unique @db.VarChar(255)
+  passwordHash String       @map("password_hash") @db.VarChar(255)
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+
+  createdTeams Team[]       @relation("TeamCreator")
+  teamMembers  TeamMember[]
+  notes        Note[]       @relation("NoteCreator")
+  sessions     Session[]
+
+  @@map("users")
+}
+
+model Team {
+  id        Int          @id @default(autoincrement())
+  name      String       @db.VarChar(150)
+  createdBy Int          @map("created_by")
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+
+  creator   User         @relation("TeamCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  members   TeamMember[]
+  notes     Note[]
+
+  @@map("teams")
+}
+
+model TeamMember {
+  teamId   Int      @map("team_id")
+  userId   Int      @map("user_id")
+  role     TeamRole @default(MEMBER)
+  joinedAt DateTime @default(now()) @map("joined_at") @db.Timestamp(6)
+
+  team     Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  @@index([userId, teamId])
+  @@map("team_members")
+}
+
+model Note {
+  id         Int      @id @default(autoincrement())
+  title      String   @db.VarChar(200)
+  content    String   @default("") @db.Text
+  createdBy  Int      @map("created_by")
+  teamId     Int?     @map("team_id")
+  isPinned   Boolean  @default(false) @map("is_pinned")
+  isArchived Boolean  @default(false) @map("is_archived")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  creator    User     @relation("NoteCreator", fields: [createdBy], references: [id], onDelete: Restrict)
+  team       Team?    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@index([createdBy, teamId])
+  @@index([teamId, isArchived])
+  @@map("notes")
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  tokenHash String   @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime @map("expires_at") @db.Timestamp(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
