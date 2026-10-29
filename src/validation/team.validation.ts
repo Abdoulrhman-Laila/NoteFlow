@@ -1,5 +1,5 @@
 import { HttpError } from "../errors/http-error.js";
-import type { AddTeamMemberInput, AssignableTeamRole, CreateTeamInput } from "../types/team.js";
+import type { AddTeamMemberInput, AssignableTeamRole, CreateTeamInput, UpdateMemberRoleInput } from "../types/team.js";
 import { normalizeEmail } from "../utils/email.js";
 
 const NAME_MAX = 150;
@@ -47,6 +47,21 @@ export function parseTeamId(value: string | string[] | undefined): number {
   return id;
 }
 
+export function parseUserId(value: string | string[] | undefined): number {
+  const raw = Array.isArray(value) ? value[0] : value;
+
+  if (raw === undefined || !/^[1-9]\d*$/.test(raw)) {
+    throw new HttpError(400, "Validation failed", { userId: "userId must be a positive integer" });
+  }
+
+  const userId = Number(raw);
+  if (!Number.isSafeInteger(userId)) {
+    throw new HttpError(400, "Validation failed", { userId: "userId must be a positive integer" });
+  }
+
+  return userId;
+}
+
 function isAssignableRole(value: unknown): value is AssignableTeamRole {
   return typeof value === "string" && ASSIGNABLE_ROLES.some((role) => role === value);
 }
@@ -78,4 +93,16 @@ export function parseAddTeamMember(body: unknown): AddTeamMemberInput {
   }
 
   return { email, role: body.role };
+}
+
+export function parseUpdateMemberRole(body: unknown): UpdateMemberRoleInput {
+  if (!isRecord(body)) {
+    throw new HttpError(400, "Request body must be a JSON object");
+  }
+
+  if (!isAssignableRole(body.role)) {
+    throw new HttpError(400, "Validation failed", { role: "role must be ADMIN or MEMBER" });
+  }
+
+  return { role: body.role };
 }

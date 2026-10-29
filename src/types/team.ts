@@ -21,12 +21,25 @@ export interface AddTeamMemberInput {
   role: AssignableTeamRole;
 }
 
+export interface UpdateMemberRoleInput {
+  role: AssignableTeamRole;
+}
+
 export interface TeamMember {
   teamId: number;
   userId: number;
   name: string;
   email: string;
   role: AssignableTeamRole;
+  joinedAt: string;
+}
+
+export interface ListedTeamMember {
+  teamId: number;
+  userId: number;
+  name: string;
+  email: string;
+  role: TeamRole;
   joinedAt: string;
 }
 
