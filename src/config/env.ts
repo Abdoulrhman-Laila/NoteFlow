@@ -42,6 +42,23 @@ function readPort(value: string | undefined): number {
   return port;
 }
 
+function readTrustProxy(value: string | undefined): false | number {
+  if (value === undefined || value.trim() === "" || value === "0" || value.toLowerCase() === "false") {
+    return false;
+  }
+
+  if (value.toLowerCase() === "true") {
+    throw new Error('Invalid TRUST_PROXY value: "true". Set a hop count such as 1.');
+  }
+
+  const hops = Number(value);
+  if (!Number.isInteger(hops) || hops < 1 || hops > 5) {
+    throw new Error(`Invalid TRUST_PROXY value: "${value}". Expected false or an integer from 1 to 5.`);
+  }
+
+  return hops;
+}
+
 function readDatabaseUrl(value: string | undefined): string {
   if (value === undefined || value.trim() === "") {
     throw new Error("DATABASE_URL is required.");
@@ -55,5 +72,6 @@ loadEnvFile();
 export const env = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: readPort(process.env.PORT),
+  trustProxy: readTrustProxy(process.env.TRUST_PROXY),
   databaseUrl: readDatabaseUrl(process.env.DATABASE_URL),
 } as const;

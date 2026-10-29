@@ -9,6 +9,16 @@ function isInvalidJson(err: unknown): err is SyntaxError {
   return parseError.type === "entity.parse.failed" || parseError.status === 400;
 }
 
+function logUnhandledError(error: unknown): void {
+  if (typeof error === "object" && error !== null && "code" in error && typeof error.code === "string") {
+    console.error(`Unhandled error: ${error.code}`);
+    return;
+  }
+
+  const name = error instanceof Error ? error.name : "Error";
+  console.error(`Unhandled error: ${name}`);
+}
+
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {
     const body: ApiError = {
@@ -34,7 +44,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     return;
   }
 
-  console.error(err);
+  logUnhandledError(err);
 
   const body: ApiError = {
     success: false,
