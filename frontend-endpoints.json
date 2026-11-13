@@ -1,0 +1,447 @@
+{
+  "api": "NoteFlow",
+  "baseUrl": "http://localhost:3000",
+  "version": "v1",
+  "auth": {
+    "type": "Bearer",
+    "header": "Authorization",
+    "format": "Bearer <token>",
+    "tokenSource": "data.token from register or login",
+    "storeOnClient": "keep the token after register and login, then send it on every protected request",
+    "doNotSend": ["password", "userId as the note owner", "teamId in a note body"]
+  },
+  "response": {
+    "success": { "success": true, "data": {} },
+    "error": { "success": false, "message": "string", "errors": { "field": "string" } },
+    "noContent": "204 with an empty body"
+  },
+  "models": {
+    "user": {
+      "id": "number",
+      "name": "string",
+      "email": "string",
+      "createdAt": "ISO string"
+    },
+    "session": {
+      "user": "user",
+      "token": "string"
+    },
+    "note": {
+      "id": "number",
+      "title": "string",
+      "content": "string",
+      "createdBy": "number",
+      "teamId": "number | null",
+      "isPinned": "boolean",
+      "isArchived": "boolean",
+      "createdAt": "ISO string",
+      "updatedAt": "ISO string"
+    },
+    "team": {
+      "id": "number",
+      "name": "string",
+      "createdBy": "number",
+      "role": "OWNER | ADMIN | MEMBER",
+      "createdAt": "ISO string"
+    },
+    "listedTeamMember": {
+      "teamId": "number",
+      "userId": "number",
+      "name": "string",
+      "email": "string",
+      "role": "OWNER | ADMIN | MEMBER",
+      "joinedAt": "ISO string"
+    },
+    "addedTeamMember": {
+      "teamId": "number",
+      "userId": "number",
+      "name": "string",
+      "email": "string",
+      "role": "ADMIN | MEMBER",
+      "joinedAt": "ISO string"
+    }
+  },
+  "endpoints": [
+    {
+      "id": "health",
+      "method": "GET",
+      "path": "/api/health",
+      "auth": false,
+      "purpose": "Check that the API process is running.",
+      "frontendUse": "Show a connection status before login.",
+      "successStatus": 200,
+      "response": { "success": true, "data": { "status": "ok" } }
+    },
+    {
+      "id": "register",
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "auth": false,
+      "purpose": "Create an account and return a session.",
+      "frontendUse": "Sign-up form. Save data.token and treat the user as logged in.",
+      "body": {
+        "name": "string, required, max 100",
+        "email": "string, required, stored lowercase",
+        "password": "string, required, 10 to 128 characters"
+      },
+      "successStatus": 201,
+      "response": "session",
+      "errors": {
+        "400": "Validation failed",
+        "409": "Email is already registered",
+        "429": "Too many attempts. Try again later."
+      }
+    },
+    {
+      "id": "login",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "auth": false,
+      "purpose": "Sign in and return a session.",
+      "frontendUse": "Login form. Save data.token.",
+      "body": {
+        "email": "string, required",
+        "password": "string, required"
+      },
+      "successStatus": 200,
+      "response": "session",
+      "errors": {
+        "400": "Validation failed",
+        "401": "Invalid email or password",
+        "429": "Too many attempts. Try again later."
+      }
+    },
+    {
+      "id": "me",
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "auth": true,
+      "purpose": "Return the current user from the session.",
+      "frontendUse": "Restore the session on app load.",
+      "successStatus": 200,
+      "response": { "user": "user" },
+      "errors": {
+        "401": "Authentication required"
+      }
+    },
+    {
+      "id": "logout",
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "auth": true,
+      "purpose": "Revoke the current session.",
+      "frontendUse": "Logout button. Delete the stored token after 204.",
+      "successStatus": 204,
+      "response": null,
+      "errors": {
+        "401": "Authentication required"
+      }
+    },
+    {
+      "id": "createPersonalNote",
+      "method": "POST",
+      "path": "/api/v1/notes",
+      "auth": true,
+      "purpose": "Create a personal note owned by the signed-in user.",
+      "frontendUse": "New personal note form. Do not send createdBy or teamId.",
+      "body": {
+        "title": "string, required, max 200",
+        "content": "string, optional, max 20000"
+      },
+      "successStatus": 201,
+      "response": "note",
+      "notes": "teamId is always null."
+    },
+    {
+      "id": "listPersonalNotes",
+      "method": "GET",
+      "path": "/api/v1/notes",
+      "auth": true,
+      "purpose": "List personal notes for the signed-in user.",
+      "frontendUse": "Personal notes screen. Team notes never appear here.",
+      "successStatus": 200,
+      "response": "note[]"
+    },
+    {
+      "id": "getPersonalNote",
+      "method": "GET",
+      "path": "/api/v1/notes/:id",
+      "auth": true,
+      "purpose": "Read one personal note.",
+      "frontendUse": "Personal note detail. A missing or foreign note is 404.",
+      "params": { "id": "positive integer" },
+      "successStatus": 200,
+      "response": "note",
+      "errors": {
+        "400": "id must be a positive integer",
+        "404": "Note not found"
+      }
+    },
+    {
+      "id": "updatePersonalNote",
+      "method": "PATCH",
+      "path": "/api/v1/notes/:id",
+      "auth": true,
+      "purpose": "Update a personal note.",
+      "frontendUse": "Edit title, content, pin, or archive. Send at least one field.",
+      "params": { "id": "positive integer" },
+      "body": {
+        "title": "string, optional",
+        "content": "string, optional",
+        "isPinned": "boolean, optional",
+        "isArchived": "boolean, optional"
+      },
+      "successStatus": 200,
+      "response": "note",
+      "errors": {
+        "400": "empty body or invalid fields",
+        "404": "Note not found"
+      }
+    },
+    {
+      "id": "deletePersonalNote",
+      "method": "DELETE",
+      "path": "/api/v1/notes/:id",
+      "auth": true,
+      "purpose": "Delete a personal note.",
+      "frontendUse": "Delete button on a personal note.",
+      "params": { "id": "positive integer" },
+      "successStatus": 204,
+      "response": null,
+      "errors": {
+        "404": "Note not found"
+      }
+    },
+    {
+      "id": "createTeam",
+      "method": "POST",
+      "path": "/api/v1/teams",
+      "auth": true,
+      "purpose": "Create a team. The signed-in user becomes OWNER.",
+      "frontendUse": "Create-team form. Do not send createdBy.",
+      "body": {
+        "name": "string, required, trimmed, max 150"
+      },
+      "successStatus": 201,
+      "response": "team"
+    },
+    {
+      "id": "listTeams",
+      "method": "GET",
+      "path": "/api/v1/teams",
+      "auth": true,
+      "purpose": "List teams the signed-in user belongs to.",
+      "frontendUse": "Sidebar or team picker. role is this user's role in each team.",
+      "successStatus": 200,
+      "response": "team[]"
+    },
+    {
+      "id": "getTeam",
+      "method": "GET",
+      "path": "/api/v1/teams/:id",
+      "auth": true,
+      "purpose": "Read one team if the signed-in user is a member.",
+      "frontendUse": "Team home. Hide the team when the status is 404.",
+      "params": { "id": "positive integer" },
+      "successStatus": 200,
+      "response": "team",
+      "errors": {
+        "403": "not used here",
+        "404": "Team not found"
+      }
+    },
+    {
+      "id": "renameTeam",
+      "method": "PATCH",
+      "path": "/api/v1/teams/:id",
+      "auth": true,
+      "purpose": "Rename a team. OWNER only.",
+      "frontendUse": "Enable rename only when the current user's role is OWNER.",
+      "params": { "id": "positive integer" },
+      "body": {
+        "name": "string, required, trimmed, max 150"
+      },
+      "successStatus": 200,
+      "response": "team",
+      "errors": {
+        "403": "Only the team owner can rename the team",
+        "404": "Team not found"
+      }
+    },
+    {
+      "id": "deleteTeam",
+      "method": "DELETE",
+      "path": "/api/v1/teams/:id",
+      "auth": true,
+      "purpose": "Delete a team. OWNER only. Members and team notes are removed.",
+      "frontendUse": "Enable delete only for OWNER. Personal notes stay.",
+      "params": { "id": "positive integer" },
+      "successStatus": 204,
+      "response": null,
+      "errors": {
+        "403": "Only the team owner can delete the team",
+        "404": "Team not found"
+      }
+    },
+    {
+      "id": "listTeamMembers",
+      "method": "GET",
+      "path": "/api/v1/teams/:id/members",
+      "auth": true,
+      "purpose": "List team members, including the owner.",
+      "frontendUse": "Members table. Any member may open this screen.",
+      "params": { "id": "positive integer" },
+      "successStatus": 200,
+      "response": "listedTeamMember[]",
+      "errors": {
+        "404": "Team not found"
+      }
+    },
+    {
+      "id": "addTeamMember",
+      "method": "POST",
+      "path": "/api/v1/teams/:id/members",
+      "auth": true,
+      "purpose": "Add an existing user by email. OWNER only. Role must be ADMIN or MEMBER.",
+      "frontendUse": "Invite form. Do not offer OWNER as a role.",
+      "params": { "id": "positive integer" },
+      "body": {
+        "email": "string, required",
+        "role": "ADMIN | MEMBER"
+      },
+      "successStatus": 201,
+      "response": "addedTeamMember",
+      "errors": {
+        "400": "OWNER is not assignable",
+        "403": "Only the team owner can add members",
+        "404": "Team not found, or User not found",
+        "409": "User is already a team member"
+      }
+    },
+    {
+      "id": "updateTeamMemberRole",
+      "method": "PATCH",
+      "path": "/api/v1/teams/:id/members/:userId",
+      "auth": true,
+      "purpose": "Change a member role between ADMIN and MEMBER. OWNER only.",
+      "frontendUse": "Role select on a member row. Do not call this for the owner row.",
+      "params": {
+        "id": "team id, positive integer",
+        "userId": "member user id, positive integer"
+      },
+      "body": {
+        "role": "ADMIN | MEMBER"
+      },
+      "successStatus": 200,
+      "response": "addedTeamMember",
+      "errors": {
+        "400": "The team owner role cannot be changed",
+        "403": "Only the team owner can change member roles",
+        "404": "Team not found, or User not found"
+      }
+    },
+    {
+      "id": "removeTeamMember",
+      "method": "DELETE",
+      "path": "/api/v1/teams/:id/members/:userId",
+      "auth": true,
+      "purpose": "Remove a member. OWNER only. The owner cannot be removed.",
+      "frontendUse": "Remove button on a member row, hidden for the owner.",
+      "params": {
+        "id": "team id, positive integer",
+        "userId": "member user id, positive integer"
+      },
+      "successStatus": 204,
+      "response": null,
+      "errors": {
+        "400": "The team owner cannot be removed",
+        "403": "Only the team owner can remove members",
+        "404": "Team not found, or User not found"
+      }
+    },
+    {
+      "id": "createTeamNote",
+      "method": "POST",
+      "path": "/api/v1/teams/:id/notes",
+      "auth": true,
+      "purpose": "Create a note inside a team. Any member may create.",
+      "frontendUse": "New team note form. Send title and optional content only. The team comes from the URL.",
+      "params": { "id": "team id" },
+      "body": {
+        "title": "string, required, max 200",
+        "content": "string, optional, max 20000"
+      },
+      "successStatus": 201,
+      "response": "note",
+      "errors": {
+        "404": "Team not found"
+      }
+    },
+    {
+      "id": "listTeamNotes",
+      "method": "GET",
+      "path": "/api/v1/teams/:id/notes",
+      "auth": true,
+      "purpose": "List notes for one team.",
+      "frontendUse": "Team notes screen. Keep this list separate from GET /api/v1/notes.",
+      "params": { "id": "team id" },
+      "successStatus": 200,
+      "response": "note[]",
+      "errors": {
+        "404": "Team not found"
+      }
+    },
+    {
+      "id": "updateTeamNote",
+      "method": "PATCH",
+      "path": "/api/v1/teams/:id/notes/:noteId",
+      "auth": true,
+      "purpose": "Update a team note. Any member may update.",
+      "frontendUse": "Edit a team note. Send at least one of title, content, isPinned, isArchived.",
+      "params": {
+        "id": "team id",
+        "noteId": "note id"
+      },
+      "body": {
+        "title": "string, optional",
+        "content": "string, optional",
+        "isPinned": "boolean, optional",
+        "isArchived": "boolean, optional"
+      },
+      "successStatus": 200,
+      "response": "note",
+      "errors": {
+        "400": "empty body or invalid fields",
+        "404": "Team not found, or Note not found"
+      }
+    },
+    {
+      "id": "deleteTeamNote",
+      "method": "DELETE",
+      "path": "/api/v1/teams/:id/notes/:noteId",
+      "auth": true,
+      "purpose": "Delete a team note. Any member may delete.",
+      "frontendUse": "Delete button on a team note.",
+      "params": {
+        "id": "team id",
+        "noteId": "note id"
+      },
+      "successStatus": 204,
+      "response": null,
+      "errors": {
+        "404": "Team not found, or Note not found"
+      }
+    }
+  ],
+  "frontendRules": [
+    "All /api/v1 routes except register and login need Authorization: Bearer <token>.",
+    "On 401, clear the token and send the user to login.",
+    "Personal notes live under /api/v1/notes. Team notes live under /api/v1/teams/:id/notes. Do not mix the lists.",
+    "createdBy and teamId on notes come from the server. Ignore those fields if the form sends them.",
+    "Treat 404 on a team route as 'this team is not available', including when the user is not a member.",
+    "Show OWNER-only actions only when data.role is OWNER: rename team, delete team, add member, change role, remove member.",
+    "ADMIN and MEMBER can create, read, update, and delete team notes, and can list members.",
+    "There is no GET /api/v1/teams/:id/notes/:noteId. Open a team note from the team notes list.",
+    "/api/tasks is not part of the product API."
+  ]
+}

@@ -1,8 +1,8 @@
 <h1 align="center">NoteFlow</h1>
 
 <p align="center">
-  واجهة REST للملاحظات الشخصية وملاحظات الفرق.<br>
-  المالك يُؤخذ من الجلسة، والملاحظتان لا تختلطان.
+  REST API للملاحظات الشخصية وملاحظات الفرق.<br>
+  المالك يُؤخذ من الجلسة. لا JWT.
 </p>
 
 <p align="center">
@@ -19,163 +19,237 @@
   <img alt="Password hashing" src="https://img.shields.io/badge/passwords-scrypt-7c3aed?style=flat-square">
 </p>
 
-## ✨ نظرة عامة
+## المحتويات
 
-NoteFlow يفصل الملاحظة الشخصية عن ملاحظة الفريق. `teamId` للملاحظة الشخصية يبقى `null`. هوية الكاتب تأتي من الجلسة، ولا تُقبل من جسم الطلب.
+- [نظرة عامة](#نظرة-عامة)
+- [التثبيت](#التثبيت)
+- [متغيرات البيئة](#متغيرات-البيئة)
+- [المعمارية](#المعمارية)
+- [مخطط قاعدة البيانات](#مخطط-قاعدة-البيانات)
+- [توثيق الواجهة OpenAPI](#توثيق-الواجهة-openapi)
+- [تدفق المصادقة](#تدفق-المصادقة)
+- [شكل الخطأ](#شكل-الخطأ)
+- [الاختبارات](#الاختبارات)
 
-لا يُستخدم JWT. رمز الجلسة يُرسل في ترويسة `Authorization`، ويُحفظ في قاعدة البيانات بصمة فقط.
+## نظرة عامة
 
-## 🧰 التقنيات
+NoteFlow يفصل الملاحظة الشخصية (`teamId = null`) عن ملاحظة الفريق. `createdBy` يأتي من الجلسة فقط. كلمة المرور تُخزَّن بـ scrypt. رمز الجلسة 43 حرفاً يُرسل في `Authorization: Bearer` ويُحفظ في القاعدة كـ SHA-256.
 
-| | التقنية | الدور |
-| --- | --- | --- |
-| <img alt="" height="20" src="https://cdn.simpleicons.org/nodedotjs/339933"> | Node.js 22 | بيئة التشغيل |
-| <img alt="" height="20" src="https://cdn.simpleicons.org/express/000000"> | Express 5 | خادم HTTP |
-| <img alt="" height="20" src="https://cdn.simpleicons.org/typescript/3178C6"> | TypeScript | لغة المصدر |
-| <img alt="" height="20" src="https://cdn.simpleicons.org/prisma/2D3748"> | Prisma 7 | الوصول إلى البيانات |
-| <img alt="" height="20" src="https://cdn.simpleicons.org/postgresql/4169E1"> | PostgreSQL 17 | قاعدة البيانات |
+مواصفات الواجهة للفرونت: [`frontend-endpoints.json`](frontend-endpoints.json).
 
-## 📋 المتطلبات
+## التثبيت
 
-- Node.js 22 أو أحدث
-- npm
-- PostgreSQL 17
-
-## 🚀 التشغيل
+المتطلبات: Node.js 22، npm، PostgreSQL 17.
 
 ```bash
 npm install
 copy .env.example .env
 ```
 
-ضع كلمة مرور قاعدة البيانات داخل `DATABASE_URL` في `.env`. هذا الملف لا يُرفع.
+عدّل `DATABASE_URL` في `.env`. أنشئ قاعدة `notes_management_dev` ومستخدمها. `prisma migrate dev` يحتاج صلاحية `CREATEDB` لقاعدة الظل.
+
+عميل Prisma غير مرفوع مع Git (`src/generated/` مستبعد). ولّده ثم طبّق الترحيلات:
 
 ```bash
+npx prisma generate
 npx prisma migrate dev
 npm run dev
 ```
 
-الخادم يستمع على `http://localhost:3000` ما لم تغيّر `PORT`.
+الخادم: `http://localhost:3000`. في الإنتاج: `npx prisma generate` ثم `npx prisma migrate deploy` ثم `npm run build` و`npm start`. خلف وكيل واحد اضبط `TRUST_PROXY=1`.
 
 | الأمر | الوظيفة |
 | --- | --- |
-| `npm run dev` | تشغيل التطوير مع إعادة التحميل |
-| `npm run typecheck` | فحص الأنواع من غير إنتاج ملفات |
-| `npm run build` | ترجمة TypeScript إلى `dist` |
+| `npm run dev` | تطوير مع إعادة التحميل |
+| `npm run typecheck` | فحص الأنواع |
+| `npm run build` | ترجمة إلى `dist` |
 | `npm start` | تشغيل النسخة المبنية |
 
-`prisma migrate dev` ينشئ قاعدة ظل، لذلك مستخدم PostgreSQL يحتاج صلاحية `CREATEDB`. في الإنتاج استخدم `npx prisma migrate deploy`.
+## متغيرات البيئة
 
-## 📦 شكل الاستجابة
+انسخ `.env.example`. لا ترفع `.env`.
 
-النجاح:
+| المتغير | مطلوب | الافتراضي | الوظيفة |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | نعم | — | اتصال PostgreSQL |
+| `PORT` | لا | `3000` | منفذ الاستماع |
+| `NODE_ENV` | لا | `development` | بيئة التشغيل |
+| `TRUST_PROXY` | لا | غير مفعّل | عدد قفزات الوكيل (`1` على Render). القيمة `true` مرفوضة عند الإقلاع |
+
+مثال:
+
+```
+PORT=3000
+NODE_ENV=development
+DATABASE_URL="postgresql://notes_app:REPLACE_WITH_YOUR_PASSWORD@localhost:5432/notes_management_dev?schema=public"
+```
+
+## المعمارية
+
+```
+Request
+  → Express (JSON 1mb, CORS, trust proxy)
+    → Router
+      → requireAuth | rate limit (register/login)
+        → Controller (تحقق الجسم)
+          → Service
+            → Prisma Client + PrismaPg
+              → PostgreSQL
+```
+
+لا طبقة Repository منفصلة. Prisma هو منفذ القاعدة. أخطاء Express 5 غير الملتقطة تصل إلى المعالج المركزي.
+
+```mermaid
+flowchart TD
+  client[Client] --> express[Express 5]
+  express --> authMw[requireAuth / rateLimit]
+  authMw --> controller[Controller]
+  controller --> service[Service]
+  service --> prisma[Prisma]
+  prisma --> pg[PostgreSQL]
+```
+
+## مخطط قاعدة البيانات
+
+حذف الفريق يزيل الأعضاء وملاحظات الفريق (`ON DELETE CASCADE`). حذف مستخدم أنشأ فريقاً أو ملاحظة يمنعه `RESTRICT`. حذف المستخدم يزيل جلساته.
+
+```mermaid
+erDiagram
+  users ||--o{ sessions : has
+  users ||--o{ teams : creates
+  users ||--o{ team_members : joins
+  users ||--o{ notes : writes
+  teams ||--o{ team_members : has
+  teams ||--o{ notes : contains
+
+  users {
+    int id PK
+    varchar name
+    varchar email UK
+    varchar password_hash
+    timestamp created_at
+  }
+  sessions {
+    int id PK
+    int user_id FK
+    varchar token_hash UK
+    timestamp expires_at
+  }
+  teams {
+    int id PK
+    varchar name
+    int created_by FK
+    timestamp created_at
+  }
+  team_members {
+    int team_id PK, FK
+    int user_id PK, FK
+    enum role
+    timestamp joined_at
+  }
+  notes {
+    int id PK
+    varchar title
+    text content
+    int created_by FK
+    int team_id FK
+    boolean is_pinned
+    boolean is_archived
+  }
+```
+
+`TeamRole`: `OWNER` | `ADMIN` | `MEMBER`.
+
+## توثيق الواجهة OpenAPI
+
+المواصفة: [`docs/openapi.yaml`](docs/openapi.yaml).
+
+افتح الملف في [Swagger Editor](https://editor.swagger.io) أو استورده في Postman. المسارات الكاملة أيضاً في الجداول أدناه وفي `frontend-endpoints.json`.
+
+| الطريقة | المسار | الجلسة | الحالة |
+| --- | --- | --- | --- |
+| `GET` | `/api/health` | لا | `200` |
+| `POST` | `/api/v1/auth/register` | لا | `201` |
+| `POST` | `/api/v1/auth/login` | لا | `200` |
+| `GET` | `/api/v1/auth/me` | نعم | `200` |
+| `POST` | `/api/v1/auth/logout` | نعم | `204` |
+| `POST` `GET` | `/api/v1/notes` | نعم | `201` / `200` |
+| `GET` `PATCH` `DELETE` | `/api/v1/notes/:id` | نعم | `200` / `200` / `204` |
+| `POST` `GET` | `/api/v1/teams` | نعم | `201` / `200` |
+| `GET` `PATCH` `DELETE` | `/api/v1/teams/:id` | نعم | `200` / `200` / `204` |
+| `GET` `POST` | `/api/v1/teams/:id/members` | نعم | `200` / `201` |
+| `PATCH` `DELETE` | `/api/v1/teams/:id/members/:userId` | نعم | `200` / `204` |
+| `POST` `GET` | `/api/v1/teams/:id/notes` | نعم | `201` / `200` |
+| `PATCH` `DELETE` | `/api/v1/teams/:id/notes/:noteId` | نعم | `200` / `204` |
+
+إعادة تسمية الفريق وحذفه وإدارة الأعضاء للمالك فقط. أي عضو ينشئ ويعدّل ويحذف ملاحظات الفريق. لا يوجد `GET` لملاحظة فريق واحدة.
+
+## تدفق المصادقة
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant API as NoteFlow
+  participant DB as PostgreSQL
+  C->>API: POST /api/v1/auth/register
+  API->>DB: user + session.token_hash
+  API-->>C: 201 data.token
+  C->>API: Authorization Bearer token
+  API->>DB: lookup SHA-256 hash
+  alt valid session
+    API-->>C: 200
+  else missing expired or unknown
+    API-->>C: 401 Authentication required
+  end
+  C->>API: POST /api/v1/auth/logout
+  API->>DB: delete session row
+  API-->>C: 204
+```
+
+- التسجيل والدخول: 5 محاولات لكل عنوان خلال 15 دقيقة، عداد مستقل. `429` عند التجاوز. العداد في الذاكرة.
+- كلمة المرور 10–128 حرفاً، scrypt `N=32768`. الدخول الخاطئ أو البريد المجهول: `401 Invalid email or password`.
+- الجلسة 7 أيام. الخروج يحذف الصف. التكرار بعد الخروج `401`.
+
+## شكل الخطأ
+
+نجاح:
 
 ```json
 { "success": true, "data": {} }
 ```
 
-الخطأ:
+خطأ:
 
 ```json
-{ "success": false, "message": "Validation failed", "errors": {} }
+{ "success": false, "message": "Validation failed", "errors": { "title": "title is required" } }
 ```
 
-`errors` يظهر عند أخطاء التحقق فقط. الحذف الناجح يرجع `204` من دون جسم.
+| الحالة | متى |
+| --- | --- |
+| `400` | تحقق أو JSON غير صالح |
+| `401` | بلا جلسة أو جلسة منتهية أو كلمة مرور خاطئة |
+| `403` | عضو ليس مالكاً على عملية المالك |
+| `404` | مورد غائب، أو غير عضو (`Team not found`) |
+| `409` | بريد مكرر أو عضوية مكررة |
+| `429` | تجاوز حد التسجيل أو الدخول |
+| `500` | `Internal server error` من دون تفاصيل |
+| `204` | حذف ناجح، بلا جسم |
 
-## 🔐 المصادقة
+`errors` يظهر عند فشل التحقق فقط.
 
-```http
-Authorization: Bearer <token>
-```
+## الاختبارات
 
-التسجيل والدخول محدودان بخمس محاولات لكل عنوان خلال 15 دقيقة، ولكل مسار عداد مستقل. تجاوز الحد يرجع `429` والرسالة `Too many attempts. Try again later.`. العداد في الذاكرة ويُصفَّر عند إعادة تشغيل العملية. خلف وكيل عكسي واحد اضبط `TRUST_PROXY=1` حتى يُحسب عنوان الزائر لا عنوان الوكيل. `GET /me` و`POST /logout` غير محدودين.
+السجل الكامل: [`docs/TESTING.md`](docs/TESTING.md).
 
-| الطريقة | المسار | الحالة | الوصف |
-| --- | --- | --- | --- |
-| `POST` | `/api/v1/auth/register` | `201` | إنشاء حساب وجلسة |
-| `POST` | `/api/v1/auth/login` | `200` | تسجيل الدخول |
-| `GET` | `/api/v1/auth/me` | `200` | المستخدم الحالي |
-| `POST` | `/api/v1/auth/logout` | `204` | إبطال الجلسة الحالية |
-
-```json
-{ "name": "Lina", "email": "lina@example.com", "password": "correct-horse" }
-```
-
-- الاسم حتى 100 حرفاً.
-- البريد يُقص ويُحوَّل إلى أحرف صغيرة. التكرار يرجع `409`.
-- كلمة المرور من 10 إلى 128 حرفاً، وتُخزَّن بخوارزمية scrypt.
-- بيانات الدخول الخاطئة ترجع `401` والرسالة `Invalid email or password`.
-- الجلسة تعيش 7 أيام. الخروج يحذفها، وتكرار الخروج أو استخدام جلسة منتهية يرجع `401`.
-
-## 💚 فحص الصحة
-
-```http
-GET /api/health
-```
-
-```json
-{ "success": true, "data": { "status": "ok" } }
-```
-
-## 📝 الملاحظات الشخصية
-
-كل المسارات تتطلب جلسة. ملاحظات الفرق لا تظهر هنا.
-
-| الطريقة | المسار | الحالة |
+| الدور | التاريخ | النتيجة |
 | --- | --- | --- |
-| `POST` | `/api/v1/notes` | `201` |
-| `GET` | `/api/v1/notes` | `200` |
-| `GET` | `/api/v1/notes/:id` | `200` |
-| `PATCH` | `/api/v1/notes/:id` | `200` |
-| `DELETE` | `/api/v1/notes/:id` | `204` |
+| وظيفي | 12 نوفمبر 2026 | 70 / 70 |
+| سلب | 12 نوفمبر 2026 | 35 / 35 |
+| تكامل حتى PostgreSQL | 12 نوفمبر 2026 | 28 / 28 |
+| تدقيق أمني | 12 نوفمبر 2026 | 26 / 26 |
 
-```json
-{ "title": "Idea", "content": "First line" }
-```
+لا يوجد `npm test`. الفحوص كانت سكربتات مؤقتة ضد التطبيق وقاعدة التطوير.
 
-التعديل يقبل حقلًا واحداً على الأقل من `title` و`content` و`isPinned` و`isArchived`. العنوان حتى 200 حرف، والمحتوى حتى 20000 حرف. الملاحظة الغائبة أو المملوكة لمستخدم آخر ترجع `404` والرسالة `Note not found`.
+## ما لا يُرفع
 
-## 👥 الفرق
-
-| الطريقة | المسار | الحالة | الصلاحية |
-| --- | --- | --- | --- |
-| `POST` | `/api/v1/teams` | `201` | أي مستخدم مسجّل، ويصبح `OWNER` |
-| `GET` | `/api/v1/teams` | `200` | فرق المستخدم الحالي فقط |
-| `POST` | `/api/v1/teams/:id/members` | `201` | `OWNER` فقط |
-
-```json
-{ "name": "Writers" }
-```
-
-اسم الفريق حتى 150 حرفاً بعد إزالة المسافات الطرفية.
-
-```json
-{ "email": "member@example.com", "role": "MEMBER" }
-```
-
-`role` يقبل `ADMIN` أو `MEMBER` فقط. إرسال `OWNER` يرجع `400`. البريد غير الموجود يرجع `404`، والعضوية المكررة ترجع `409`. من ليس عضواً يحصل على `404` والرسالة `Team not found`. العضو الذي ليس مالكاً يحصل على `403`.
-
-## 📂 ملاحظات الفريق
-
-أي عضو يستطيع الإنشاء والقراءة والتعديل والحذف. `teamId` يُؤخذ من الرابط، و`createdBy` من الجلسة.
-
-| الطريقة | المسار | الحالة |
-| --- | --- | --- |
-| `POST` | `/api/v1/teams/:id/notes` | `201` |
-| `GET` | `/api/v1/teams/:id/notes` | `200` |
-| `PATCH` | `/api/v1/teams/:id/notes/:noteId` | `200` |
-| `DELETE` | `/api/v1/teams/:id/notes/:noteId` | `204` |
-
-جسم الإنشاء والتعديل هو نفسه جسم الملاحظة الشخصية. ملاحظة لا تنتمي إلى هذا الفريق ترجع `404`. غير العضو يحصل على `404` والرسالة `Team not found`.
-
-## 🔒 ما لا يُرفع
-
-`.gitignore` يستبعد:
-
-- `node_modules/`
-- `dist/`
-- `src/generated/`
-- `.env` وأي ملف بيئة آخر غير `.env.example`
-- ملفات السجل والنسخ الاحتياطية المحلية
-
-انسخ `.env.example` محلياً وضع كلمة المرور هناك فقط.
+`node_modules/`، `dist/`، `src/generated/`، `.env`، السجلات، والنسخ `*.before-prisma`.

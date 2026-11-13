@@ -3,9 +3,11 @@ import { env } from "./config/env.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { notFound } from "./middleware/not-found.js";
 import { apiRouter } from "./routes/index.js";
+import cors from 'cors';
 
 export function createApp() {
   const app = express();
+  app.use(cors());
 
   app.disable("x-powered-by");
   app.set("trust proxy", env.trustProxy);
