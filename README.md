@@ -56,14 +56,18 @@ npx prisma migrate dev
 npm run dev
 ```
 
-الخادم: `http://localhost:3000`. في الإنتاج: `npx prisma generate` ثم `npx prisma migrate deploy` ثم `npm run build` و`npm start`. خلف وكيل واحد اضبط `TRUST_PROXY=1`.
+الخادم: `http://localhost:3000`.
+
+على الاستضافة (عملية Node طويلة، مثل Render — ليس Vercel): `NODE_ENV=production`، `DATABASE_URL` لقاعدة الإنتاج، وخلف وكيل واحد `TRUST_PROXY=1`. أمر البناء `npm run build` (يولّد عميل Prisma ثم `tsc`). أمر التشغيل `npm run start:prod` (`migrate deploy` ثم `node dist/server.js`). لا تضبط `NPM_CONFIG_PRODUCTION=true` أثناء البناء حتى يبقى TypeScript متاحاً.
 
 | الأمر | الوظيفة |
 | --- | --- |
 | `npm run dev` | تطوير مع إعادة التحميل |
 | `npm run typecheck` | فحص الأنواع |
-| `npm run build` | ترجمة إلى `dist` |
-| `npm start` | تشغيل النسخة المبنية |
+| `npm test` | اختبارات API الآلية (`node:test` + Supertest، ضد PostgreSQL) |
+| `npm run build` | `prisma generate` ثم الترجمة إلى `dist` |
+| `npm start` | تشغيل `dist` بدون ترحيل |
+| `npm run start:prod` | `prisma migrate deploy` ثم تشغيل `dist` |
 
 ## متغيرات البيئة
 
@@ -75,6 +79,7 @@ npm run dev
 | `PORT` | لا | `3000` | منفذ الاستماع |
 | `NODE_ENV` | لا | `development` | بيئة التشغيل |
 | `TRUST_PROXY` | لا | غير مفعّل | عدد قفزات الوكيل (`1` على Render). القيمة `true` مرفوضة عند الإقلاع |
+| `CORS_ORIGIN` | نعم في الإنتاج | محلي: localhost:5173 و:3000 | أصول الفرونت مفصولة بفاصلة. `*` مرفوض |
 
 مثال:
 
@@ -243,12 +248,12 @@ sequenceDiagram
 
 | Suite | التاريخ | النتيجة |
 | --- | --- | --- |
-| Functional Testing | 12 November 2026 | 70 / 70 |
-| Negative Testing | 12 November 2026 | 35 / 35 |
-| Integration Testing | 12 November 2026 | 28 / 28 |
-| Security Audit | 12 November 2026 | 26 / 26 |
+| Functional Testing | آلي عبر `npm test` | `node:test` + Supertest على `createApp()` |
+| Negative Testing | آلي عبر `npm test` | `tests/negative.test.ts` |
+| Integration Testing | آلي عبر `npm test` | `tests/integration.test.ts` — HTTP ثم صفوف Prisma |
+| Security Audit | آلي عبر `npm test` | `tests/security.test.ts` — يفعّل حد المعدل بـ `TEST_RATE_LIMIT=1` |
 
-لا يوجد `npm test`. الفحوص كانت سكربتات مؤقتة ضد التطبيق وقاعدة التطوير.
+`npm test` يعيد تشغيل المجموعات الأربع ضد PostgreSQL من `DATABASE_URL`. حد المعدل يُتخطى عندما `NODE_ENV=test` إلا داخل Security Audit (`TEST_RATE_LIMIT=1`).
 
 ## ما لا يُرفع
 

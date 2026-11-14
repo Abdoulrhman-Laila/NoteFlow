@@ -67,11 +67,49 @@ function readDatabaseUrl(value: string | undefined): string {
   return value.trim();
 }
 
+const LOCAL_DEV_ORIGINS = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+] as const;
+
+function readCorsOrigins(value: string | undefined, nodeEnv: string): readonly string[] {
+  const raw = value?.trim();
+
+  if (raw === "*") {
+    throw new Error('Invalid CORS_ORIGIN value: "*". List explicit frontend origins.');
+  }
+
+  if (raw !== undefined && raw !== "") {
+    const origins = raw.split(",").map((item) => item.trim()).filter((item) => item.length > 0);
+
+    if (origins.length === 0 || origins.includes("*")) {
+      throw new Error('Invalid CORS_ORIGIN value. List explicit frontend origins, not "*".');
+    }
+
+    return origins;
+  }
+
+  if (nodeEnv === "production") {
+    throw new Error("CORS_ORIGIN is required when NODE_ENV is production.");
+  }
+
+  if (nodeEnv === "test") {
+    return [];
+  }
+
+  return LOCAL_DEV_ORIGINS;
+}
+
 loadEnvFile();
 
+const nodeEnv = process.env.NODE_ENV ?? "development";
+
 export const env = {
-  nodeEnv: process.env.NODE_ENV ?? "development",
+  nodeEnv,
   port: readPort(process.env.PORT),
   trustProxy: readTrustProxy(process.env.TRUST_PROXY),
   databaseUrl: readDatabaseUrl(process.env.DATABASE_URL),
+  corsOrigins: readCorsOrigins(process.env.CORS_ORIGIN, nodeEnv),
 } as const;

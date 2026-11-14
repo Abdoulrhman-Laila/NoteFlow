@@ -4,12 +4,17 @@ import type { ApiError } from "../types/api.js";
 const WINDOW_MS = 15 * 60 * 1000;
 const ATTEMPT_LIMIT = 5;
 
+function skipInAutomatedTests(): boolean {
+  return process.env.NODE_ENV === "test" && process.env.TEST_RATE_LIMIT !== "1";
+}
+
 function createAuthRateLimit() {
   return rateLimit({
     windowMs: WINDOW_MS,
     limit: ATTEMPT_LIMIT,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: skipInAutomatedTests,
     handler: (_req, res) => {
       const body: ApiError = {
         success: false,

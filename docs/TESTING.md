@@ -1,12 +1,12 @@
 # Test log / سجل الاختبارات
 
-The runs below hit `createApp()` on an ephemeral port, then deleted the fixture rows in PostgreSQL. There is no `npm test` script. These are documented ad-hoc runs, not a permanent automated suite.
+All four suites are automated: `npm test` (`node:test` + Supertest on `createApp()`, PostgreSQL from `DATABASE_URL`, fixtures deleted after the run). Security Audit sets `TEST_RATE_LIMIT=1` only inside that file.
 
-## A. Functional Testing — 12 November 2026
+## A. Functional Testing
 
-الفحص الوظيفي.
+الفحص الوظيفي. الملف: `tests/functional.test.ts`. الأمر: `npm test`.
 
-**النتيجة: 70 / 70، رمز الخروج 0**
+**النتيجة السابقة (سكربت يدوي، 12 November 2026): 70 / 70.** يعاد التشغيل الآن آلياً.
 
 - كل مسار منتج ينفّذ المطلوب (صحة، مصادقة، ملاحظات شخصية، فرق، أعضاء، ملاحظات فريق).
 - النجاح `{ success: true, data }`، والخطأ `{ success: false, message }`، والحذف `204` بجسم فارغ.
@@ -15,11 +15,11 @@ The runs below hit `createApp()` on an ephemeral port, then deleted the fixture 
 
 Rate limit `429` was not part of this run; it is covered under Security Audit.
 
-## B. Negative Testing — 12 November 2026
+## B. Negative Testing
 
-اختبار السلب.
+اختبار السلب. الملف: `tests/negative.test.ts`. الأمر: `npm test`.
 
-**النتيجة: 35 / 35، رمز الخروج 0**
+**النتيجة السابقة (سكربت يدوي، 12 November 2026): 35 / 35.** يعاد التشغيل الآن آلياً.
 
 | Case | Result |
 | --- | --- |
@@ -32,11 +32,11 @@ Rate limit `429` was not part of this run; it is covered under Security Audit.
 | `userId` / `teamId` / `createdBy` في جسم الملاحظة | تُتجاهل؛ المالك من الجلسة |
 | JSON معطوب أو مصفوفة | `400` |
 
-## C. Integration Testing — 12 November 2026
+## C. Integration Testing
 
-اختبار التكامل.
+اختبار التكامل. الملف: `tests/integration.test.ts`. الأمر: `npm test`.
 
-**النتيجة: 28 / 28، رمز الخروج 0**
+**النتيجة السابقة (سكربت يدوي، 12 November 2026): 28 / 28.** يعاد التشغيل الآن آلياً.
 
 السلسلة الفعلية: الطلب → الوسيط → المتحكّم → الخدمة → Prisma → PostgreSQL. لا طبقة Repository منفصلة.
 
@@ -47,11 +47,11 @@ Rate limit `429` was not part of this run; it is covered under Security Audit.
 - حذف الفريق يزيل الأعضاء وملاحظات الفريق (`ON DELETE CASCADE`) وتبقى الملاحظة الشخصية.
 - الخروج يحذف صف الجلسة، و`/me` بعدها `401`.
 
-## D. Security Audit — 12 November 2026
+## D. Security Audit
 
-التدقيق الأمني.
+التدقيق الأمني. الملف: `tests/security.test.ts`. الأمر: `npm test`.
 
-**النتيجة: 26 / 26 HTTP checks، رمز الخروج 0**
+**النتيجة السابقة (سكربت يدوي، 12 November 2026): 26 / 26 HTTP checks.** يعاد التشغيل الآن آلياً. CORS مقيّد؛ `nosniff` وCSP مضبوطان؛ HSTS في الإنتاج فقط. File Upload غير موجود في الواجهة.
 
 | Control | الحكم |
 | --- | --- |
@@ -62,8 +62,8 @@ Rate limit `429` was not part of this run; it is covered under Security Audit.
 | Input Validation | أنواع خاطئة `400` |
 | SQL Injection | لا `$queryRaw`؛ العنوان المشبوه يُحفظ نصاً |
 | Rate Limiting | 5 ثم `429` على الدخول؛ التسجيل مستقل |
-| CORS Configuration | `cors()` يسمح بأي أصل — يحتاج تقييداً قبل الإنترنت العام |
-| Security Headers | `x-powered-by` معطّل؛ لا CSP / nosniff / HSTS |
+| CORS Configuration | أصول صريحة عبر `CORS_ORIGIN`؛ أصل غير مسموح بلا `Access-Control-Allow-Origin` |
+| Security Headers | `x-powered-by` معطّل؛ `nosniff`؛ CSP `default-src 'none'`؛ HSTS في الإنتاج |
 | Sensitive Data Exposure | الاستجابة بلا تجزئة؛ تعداد البريد عبر `409` |
 | Error Information Leakage | العميل `Internal server error`؛ السجل رمز أو اسم فقط |
 | File Upload Security | غير موجود |

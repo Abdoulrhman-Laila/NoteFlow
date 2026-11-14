@@ -5,13 +5,18 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "prisma generate && tsc -p tsconfig.json",
     "start": "node dist/server.js",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "start:prod": "prisma migrate deploy && node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test --test-concurrency=1 tests/functional.test.ts tests/negative.test.ts tests/integration.test.ts tests/security.test.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "engines": {
+    "node": ">=22"
+  },
   "type": "module",
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.1",
@@ -20,14 +25,16 @@
     "dotenv": "^18.0.8",
     "express": "^5.3.0",
     "express-rate-limit": "^8.7.1",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "prisma": "^7.10.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.5",
     "@types/pg": "^8.23.1",
-    "prisma": "^7.10.1",
+    "@types/supertest": "^7.2.1",
+    "supertest": "^7.3.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
